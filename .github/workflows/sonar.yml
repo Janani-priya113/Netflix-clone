@@ -23,12 +23,20 @@ jobs:
 
       - name: Install Trivy and scan files
         run: |
+          echo "Waiting for dpkg lock to be released..."
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+            echo "Another process is using apt, waiting..."
+            sleep 10
+          done
+
+          sudo apt-get update
           sudo apt-get install wget apt-transport-https gnupg lsb-release -y
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
           echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install trivy -y
           trivy fs .
+
       - name: Docker build and push
         run: |
           cd Netflix-clone-main
@@ -45,11 +53,19 @@ jobs:
     steps:
       - name: Install Trivy
         run: |
+          echo "Waiting for dpkg lock to be released..."
+          while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+            echo "Another process is using apt, waiting..."
+            sleep 10
+          done
+
+          sudo apt-get update
           sudo apt-get install wget apt-transport-https gnupg lsb-release -y
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
           echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install trivy -y
+
       - name: Pull the docker image
         run: docker pull jananipriya2423/netflix:latest
 
