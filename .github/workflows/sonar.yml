@@ -1,4 +1,4 @@
-name: Build, Analyze, Scan
+name: Build, Analyze, Scan, Deploy
 
 on:
   push:
@@ -25,15 +25,40 @@ jobs:
         run: |
           sudo apt-get install wget apt-transport-https gnupg lsb-release -y
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install trivy -y
           trivy fs .
 
       - name: Docker build and push
         run: |
-          docker build --build-arg TMDB_V3_API_KEY=aaf089ec8b87a3b41f965295f7ba94ef -t jananipriya2423/netflix:latest ./Netflix-clone-main
-          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+          cd Netflix-clone-main
+          docker build --build-arg TMDB_V3_API_KEY=aaf089ec8b87a3b41f965295f7ba94ef -t jananipriya2423/netflix:latest .
+          echo ${{ secrets.DOCKERHUB_TOKEN }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
           docker push jananipriya2423/netflix:latest
         env:
           DOCKER_CLI_ACI: 1
+
+  deploy:
+    needs: build-analyze-scan
+    runs-on: aws-netflix
+
+    steps:
+      - name: Install Trivy
+        run: |
+          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy -y
+
+      - name: Pull the docker image
+        run: docker pull jananipriya2423/netflix:latest
+
+      - name: Trivy image scan
+        run: trivy image jananipriya2423/netflix:latest
+
+      - name: Run the container
+        run: |
+          docker rm -f netflix || true
+          docker run -d --name netflix -p 8081:80 jananipriya2423/netflix:latest
